@@ -7,6 +7,9 @@ import json
 global df, in_position, use_features, model
 df = pd.DataFrame()
 in_position=False
+model=None
+use_features=[]
+# TODO: Ladda in model och use_features från filer
 
 
 def momentum_strategy(df):
@@ -41,7 +44,6 @@ def fibonacci_strategy(df):
     df['fib50'] = high - (0.5 * diff)
     df['fib62'] = high - (0.618 * diff)
 
-    # print(df.tail(10))
     # Köp när priset bryter igenom den 38.2% Fibonacci-nivån från botten till toppen
     if df['pris'].iloc[-1] > df['fib38'].iloc[-1] and df['pris'].iloc[-2] < df['fib38'].iloc[-2]:
         return 'buy'
@@ -57,14 +59,13 @@ def fibonacci_strategy(df):
 
 def bollinger_strategy(df):
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
-    df['sma'] = df['pris'].rolling(window=20).mean()
-    df['std'] = df['pris'].rolling(window=20).std()
+    df['boll_sma'] = df['pris'].rolling(window=20).mean()
+    df['boll_std'] = df['pris'].rolling(window=20).std()
 
     # Beräkna övre och undre Bollinger-bands
-    df['upper_band'] = df['sma'] + (2 * df['std'])
-    df['lower_band'] = df['sma'] - (2 * df['std'])
+    df['upper_band'] = df['boll_sma'] + (2 * df['boll_std'])
+    df['lower_band'] = df['boll_sma'] - (2 * df['boll_std'])
 
-    print(df.tail(10))
     # Avgör om vi ska köpa, sälja eller behålla
     if  df['pris'].iloc[-2] < df['upper_band'].iloc[-2] and df['pris'].iloc[-1] > df['upper_band'].iloc[-1]:
         return 'sell'
@@ -75,38 +76,44 @@ def bollinger_strategy(df):
 
 
 def ml_strategy(df, use_features, model):
-    # Gör en kopia av DataFrame
-    df = df.copy()
-
     # Välj endast de features som används för prediction
-    X = df[use_features]
+    X = df[use_features].copy()
+
+
+    return # Bryt
 
     # Gör predictions med modellen
-    probs = model.predict_proba(X)
+    df['proba'] = model.predict_proba(X)[:,1]
 
-    # Lägg till kolumner för buy- och sell-probabilities i DataFrame
-    df['buy_prob'] = probs[:, 1]
-    df['sell_prob'] = probs[:, 0]
+    # df['buy_prob'] = probs[:, 1]
+    # df['sell_prob'] = probs[:, 0]
 
     return df
 
-def final_strategy(df):
+def final_strategy(df, in_position):
     pass
 def trading_logic():
-    global df, use_features, model
-    
+    global df, use_features, model, in_psition
+    # print('starting trading logic')
     momentum_strategy(df)
     fibonacci_strategy(df)
     bollinger_strategy(df)
+    # print('done with strategies')
+    
     ml_strategy(df, use_features, model)
+    # print('done with ml')
     
     # Här tar vi fram slutlig sell/buy/hold-strategi
     final_strategy(df, in_position)
-
+    
+    if True:
+        print(df[['pris', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
+    
 def handle_trading(out):
     global df
     out = pd.DataFrame({'pris':float(out['c'])},index=[pd.to_datetime(out['E'],unit='ms')])
     df = pd.concat([df,out],axis=0)
+    trading_logic()
 
 def on_message(ws, message):
     out = json.loads(message)

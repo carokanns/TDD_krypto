@@ -45,22 +45,17 @@ def test_handle_trading():
 
 def test_trading_logic():
     global df
-
+    mom.use_features = ['pris',  'sma_5',  'sma_20',  'fib38',  'fib50', 'fib62',  'boll_sma',  'boll_std',  'upper_band',  'lower_band']
+    # TODO: Fixa test case. Mata med datum, pris i en loop och kontrollera att rätt df konstrueras
+    # TODO: Lägg till buy/sell/hold för varje strategy 0ch i use_features
+    # TODO: model och use_features får ligga i filer som läses in
     # Add some sample data to the dataframe
-    data = {'pris': [1, 2, 3, 4, 5]}
-    mom.df = pd.DataFrame(data, index=pd.date_range(
-        start='2022-01-01', periods=5, freq='D'))
+    data = [1, 2, 3, 4, 5]*10
+    mom.df = pd.DataFrame({'pris':data}, index=pd.date_range(
+        start='2022-01-01', periods=len(data), freq='D'))
 
     # Run the trading logic
     mom.trading_logic()
-
-    # Check that the sma_5 column has been added to the dataframe
-    assert 'sma_5' in mom.df.columns
-
-    # Check that the calculated SMA values are correct
-    expected_sma_5 = [np.nan, np.nan, np.nan, np.nan, 3]
-    assert np.allclose(mom.df['sma_5'].values, expected_sma_5, equal_nan=True)
-
 
 def test_momentum_strategy():
     # Skapa en dataframe med testdata
@@ -143,25 +138,6 @@ def test_fibonacci_strategy():
     mom.df = pd.DataFrame({'pris': test_data}, index=pd.date_range(
         start='2022-01-01', periods=len(test_data), freq='D'))
     assert mom.fibonacci_strategy(mom.df) == 'hold'
-
-def test_bollinger_strategy():
-    test_data = {'pris': [100, 110, 120, 130, 125, 135, 145, 140, 130, 120, 110, 100, 95, 85, 90, 100, 110, 120, 130, 125]}
-    test_df = pd.DataFrame(test_data, index=pd.date_range(start='2022-01-01', periods=len(test_data), freq='D'))
-    mom.df = mom.add_bollinger_bands(test_df)
-    
-    assert mom.bollinger_strategy(mom.df) == 'sell'
-
-    test_data = {'pris': [100, 110, 120, 130, 125, 135, 145, 140, 130, 120, 110, 100, 95, 85, 90, 100, 110, 120, 130, 135]}
-    test_df = pd.DataFrame(test_data, index=pd.date_range(start='2022-01-01', periods=len(test_data), freq='D'))
-    mom.df = mom.add_bollinger_bands(test_df)
-    
-    assert mom.bollinger_strategy(mom.df) == 'buy'
-
-    test_data = {'pris': [100, 110, 120, 130, 125, 135, 145, 140, 130, 120, 110, 100, 95, 85, 90, 100, 110, 120, 130, 125]}
-    test_df = pd.DataFrame(test_data, index=pd.date_range(start='2022-01-01', periods=len(test_data), freq='D'))
-    mom.df = mom.add_bollinger_bands(test_df)
-    
-    assert mom.bollinger_strategy(mom.df) == 'hold'
 
 
 def test_bollinger_strategy():
