@@ -57,6 +57,18 @@ def fibonacci_strategy(df):
         return 'hold'
 
 
+def get_b_strategy(row):
+    i = row.name
+    if i == pd.to_datetime('2022-01-24 00:00:00'):
+        print('i = ',i, 'row = ', row,'\n', df['pris'].shift(1).loc[i], df['lower_band'].shift(1).loc[i], df['pris'].shift(0).loc[i], df['lower_band'].shift(0).loc[i])
+    if df['pris'].shift(1).loc[i] < df['upper_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] > df['upper_band'].shift(0).loc[i]:
+        return 'sell'
+    elif df['pris'].shift(1).loc[i] > df['lower_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] < df['lower_band'].shift(0).loc[i]:
+        return 'buy'
+    else:
+        return 'hold'
+
+    
 def bollinger_strategy(df):
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
     df['boll_sma'] = df['pris'].rolling(window=20).mean()
@@ -67,20 +79,29 @@ def bollinger_strategy(df):
     df['lower_band'] = df['boll_sma'] - (2 * df['boll_std'])
 
     # Avgör om vi ska köpa, sälja eller behålla
-    if  df['pris'].iloc[-2] < df['upper_band'].iloc[-2] and df['pris'].iloc[-1] > df['upper_band'].iloc[-1]:
-        return 'sell'
-    elif df['pris'].iloc[-2] > df['lower_band'].iloc[-2] and df['pris'].iloc[-1] < df['lower_band'].iloc[-1]:
-        return 'buy'
-    else:
+    # shift(-1) gör att vi jämför med nästa värde
+    df['b_strategy'] = df.apply(get_b_strategy, axis=1)
+   
+    if len(df) < 2:
         return 'hold'
+    
+    # if  df['pris'].iloc[-2] < df['upper_band'].iloc[-2] and df['pris'].iloc[-1] > df['upper_band'].iloc[-1]:
+    #     return 'sell'
+    # elif df['pris'].iloc[-2] > df['lower_band'].iloc[-2] and df['pris'].iloc[-1] < df['lower_band'].iloc[-1]:
+    #     return 'buy'
+    # else:
+    #     return 'hold'
+    
+    return df['b_strategy'].iloc[-1]
 
 
 def ml_strategy(df, use_features, model):
+
+    return # Bryt
+
     # Välj endast de features som används för prediction
     X = df[use_features].copy()
 
-
-    return # Bryt
 
     # Gör predictions med modellen
     df['proba'] = model.predict_proba(X)[:,1]
@@ -92,9 +113,12 @@ def ml_strategy(df, use_features, model):
 
 def final_strategy(df, in_position):
     pass
+
 def trading_logic():
     global df, use_features, model, in_psition
     # print('starting trading logic')
+    
+    #TODO: Lägg in en sell/buy/hold-kolumn från alla tre strategierna i df
     momentum_strategy(df)
     fibonacci_strategy(df)
     bollinger_strategy(df)
@@ -108,6 +132,7 @@ def trading_logic():
     
     if True:
         print(df[['pris', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
+        
     
 def handle_trading(out):
     global df
