@@ -11,29 +11,54 @@ model=None
 use_features=[]
 # TODO: Ladda in model och use_features från filer
 
+def get_m_strategy(row):
+    current_price = row['pris']
+    sma_5 = row['sma_5']
+    sma_20 = row['sma_20']
 
-def momentum_strategy(df):
+    # Om senaste priset är högre än sma_5 och sma_20,  "buy"
+    if current_price > sma_5 and current_price > sma_20:
+        return "buy"
+    # Om senaste priset är lägre än sma_5 och sma_20,  "sell"
+    elif current_price < sma_5 and current_price < sma_20:
+        return "sell"
+    # Annars "hold"
+    else:
+        return "hold"
+        
+        
+def momentum_strategy(step=None):
+    # print('mom columns',df.columns)
+    # print('mom priser1 step', step, '\n', df['pris'].tail())
     # Beräkna sma_5 och sma_20
     df['sma_5'] = df['pris'].rolling(5).mean()
     df['sma_20'] = df['pris'].rolling(20).mean()
+    df['m_strategy'] = 'hold' 
+    # print('mom priser2 step',step,'\n',df['pris'].tail())
+    
+    
+    df['m_strategy'] = df.apply(get_m_strategy, axis=1)
+    # print('step', step, 'df.shape', df.shape, 'sista värdet', df[['m_strategy']].iloc[-1])
+    # print('sista datum', df.tail(1).index)
 
-    # Välj den senaste priset och sma-värdena
-    current_price = df['pris'][-1]
-    sma_5 = df['sma_5'][-1]
-    sma_20 = df['sma_20'][-1]
+    # print('SLUT','step',step, 'momentum_strategy momentum0:\n', df.tail(1)['m_strategy'].values,'   ', df.tail(1).index)
+    # return df.tail(1)['m_strategy'].values[0]
+    return df['m_strategy'].iloc[-1]
 
-    # Om senaste priset är högre än sma_5 och sma_20, returnera "buy"
-    if current_price > sma_5 and current_price > sma_20:
-        return "buy"
-    # Om senaste priset är lägre än sma_5 och sma_20, returnera "sell"
-    elif current_price < sma_5 and current_price < sma_20:
-        return "sell"
-    # Annars, returnera "hold"
+def get_f_strategy(row):
+    i = row.name
+  
+    # Köp när priset bryter igenom den 38.2% Fibonacci-nivån från botten till toppen
+    if df['pris'].shift(0).loc[i] > df['fib38'].shift(0).loc[i] and df['pris'].shift(1).loc[i] < df['fib38'].shift(1).loc[i]:
+        return 'buy'
+    # Sälj när priset bryter igenom den 61.8% Fibonacci-nivån från toppen till botten
+    elif df['pris'].shift(0).loc[i] < df['fib62'].shift(0).loc[i] and df['pris'].shift(1).loc[i] > df['fib62'].shift(1).loc[i]:
+        return 'sell'
+    # Behåll positionen annars
     else:
-        return "hold"
-
-
-def fibonacci_strategy(df):
+        return 'hold'
+    
+def fibonacci_strategy():
     # Beräkna 38.2%, 50% och 61.8% Fibonacci-nivåer för den senaste trenden
     # Högsta priset under de senaste 21 dagarna
     high = df['pris'].rolling(window=21).max()
@@ -44,18 +69,19 @@ def fibonacci_strategy(df):
     df['fib50'] = high - (0.5 * diff)
     df['fib62'] = high - (0.618 * diff)
 
+    df['f_strategy'] = df.apply(get_f_strategy, axis=1)
     # Köp när priset bryter igenom den 38.2% Fibonacci-nivån från botten till toppen
-    if df['pris'].iloc[-1] > df['fib38'].iloc[-1] and df['pris'].iloc[-2] < df['fib38'].iloc[-2]:
-        return 'buy'
+    # if df['pris'].iloc[-1] > df['fib38'].iloc[-1] and df['pris'].iloc[-2] < df['fib38'].iloc[-2]:
+    #     return 'buy'
 
-    # Sälj när priset bryter igenom den 61.8% Fibonacci-nivån från toppen till botten
-    elif df['pris'].iloc[-1] < df['fib62'].iloc[-1] and df['pris'].iloc[-2] > df['fib62'].iloc[-2]:
-        return 'sell'
+    # # Sälj när priset bryter igenom den 61.8% Fibonacci-nivån från toppen till botten
+    # elif df['pris'].iloc[-1] < df['fib62'].iloc[-1] and df['pris'].iloc[-2] > df['fib62'].iloc[-2]:
+    #     return 'sell'
 
-    # Behåll positionen annars
-    else:
-        return 'hold'
-
+    # # Behåll positionen annars
+    # else:
+    #     return 'hold'
+    return df['f_strategy'].iloc[-1]
 
 def get_b_strategy(row):
     i = row.name
@@ -69,7 +95,7 @@ def get_b_strategy(row):
         return 'hold'
 
     
-def bollinger_strategy(df):
+def bollinger_strategy():
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
     df['boll_sma'] = df['pris'].rolling(window=20).mean()
     df['boll_std'] = df['pris'].rolling(window=20).std()
@@ -95,7 +121,7 @@ def bollinger_strategy(df):
     return df['b_strategy'].iloc[-1]
 
 
-def ml_strategy(df, use_features, model):
+def ml_strategy(use_features, model):
 
     return # Bryt
 
@@ -111,24 +137,24 @@ def ml_strategy(df, use_features, model):
 
     return df
 
-def final_strategy(df, in_position):
+def final_strategy(in_position):
     pass
 
 def trading_logic():
-    global df, use_features, model, in_psition
+    global df, use_features, model, in_position
     # print('starting trading logic')
     
     #TODO: Lägg in en sell/buy/hold-kolumn från alla tre strategierna i df
-    momentum_strategy(df)
-    fibonacci_strategy(df)
-    bollinger_strategy(df)
+    momentum_strategy()
+    fibonacci_strategy()
+    bollinger_strategy()
     # print('done with strategies')
     
-    ml_strategy(df, use_features, model)
+    ml_strategy(use_features, model)
     # print('done with ml')
     
     # Här tar vi fram slutlig sell/buy/hold-strategi
-    final_strategy(df, in_position)
+    final_strategy(in_position)
     
     if True:
         print(df[['pris', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
