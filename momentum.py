@@ -28,8 +28,7 @@ def get_m_strategy(row):
         
         
 def momentum_strategy(step=None):
-    # print('mom columns',df.columns)
-    # print('mom priser1 step', step, '\n', df['pris'].tail())
+    print('momentum_strategy start')
     # Beräkna sma_5 och sma_20
     df['sma_5'] = df['pris'].rolling(5).mean()
     df['sma_20'] = df['pris'].rolling(20).mean()
@@ -59,6 +58,7 @@ def get_f_strategy(row):
         return 'hold'
     
 def fibonacci_strategy():
+    print('fibonacci_strategy start')
     # Beräkna 38.2%, 50% och 61.8% Fibonacci-nivåer för den senaste trenden
     # Högsta priset under de senaste 21 dagarna
     high = df['pris'].rolling(window=21).max()
@@ -85,8 +85,8 @@ def fibonacci_strategy():
 
 def get_b_strategy(row):
     i = row.name
-    if i == pd.to_datetime('2022-01-24 00:00:00'):
-        print('i = ',i, 'row = ', row,'\n', df['pris'].shift(1).loc[i], df['lower_band'].shift(1).loc[i], df['pris'].shift(0).loc[i], df['lower_band'].shift(0).loc[i])
+    # if i == pd.to_datetime('2022-01-24 00:00:00'):
+    #     print('i = ',i, 'row = ', row,'\n', df['pris'].shift(1).loc[i], df['lower_band'].shift(1).loc[i], df['pris'].shift(0).loc[i], df['lower_band'].shift(0).loc[i])
     if df['pris'].shift(1).loc[i] < df['upper_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] > df['upper_band'].shift(0).loc[i]:
         return 'sell'
     elif df['pris'].shift(1).loc[i] > df['lower_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] < df['lower_band'].shift(0).loc[i]:
@@ -96,6 +96,7 @@ def get_b_strategy(row):
 
     
 def bollinger_strategy():
+    print('bollinger_strategy start')
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
     df['boll_sma'] = df['pris'].rolling(window=20).mean()
     df['boll_std'] = df['pris'].rolling(window=20).std()
@@ -104,6 +105,7 @@ def bollinger_strategy():
     df['upper_band'] = df['boll_sma'] + (2 * df['boll_std'])
     df['lower_band'] = df['boll_sma'] - (2 * df['boll_std'])
 
+    print(df.shape)
     # Avgör om vi ska köpa, sälja eller behålla
     # shift(-1) gör att vi jämför med nästa värde
     df['b_strategy'] = df.apply(get_b_strategy, axis=1)
@@ -142,7 +144,7 @@ def final_strategy(in_position):
 
 def trading_logic():
     global df, use_features, model, in_position
-    # print('starting trading logic')
+    print('trading logic start')
     
     #TODO: Lägg in en sell/buy/hold-kolumn från alla tre strategierna i df
     momentum_strategy()
@@ -156,7 +158,7 @@ def trading_logic():
     # Här tar vi fram slutlig sell/buy/hold-strategi
     final_strategy(in_position)
     
-    if True:
+    if False:
         print(df[['pris', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
         
     
@@ -174,7 +176,7 @@ def on_open(ws):
     ws.send(the_message)
 
 endpoint = "wss://stream.binance.com:9443/ws"
-the_message = json.dumps({'method': 'SUBSCRIBE', 'params': ['btcusdt@ticker'], 'id': 1})
+the_message = json.dumps({'method': 'SUBSCRIBE', 'params': ['ethusdt@ticker'], 'id': 1})
 ws = websocket.WebSocketApp(endpoint, on_message=on_message, on_open=on_open)
 
 #%%
