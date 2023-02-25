@@ -9,10 +9,9 @@ df = pd.DataFrame()
 in_position=False
 model=None
 use_features=[]
-# TODO: Ladda in model och use_features från filer
 
 def get_m_strategy(row):
-    current_price = row['pris']
+    current_price = row['close']
     sma_5 = row['sma_5']
     sma_20 = row['sma_20']
 
@@ -30,10 +29,10 @@ def get_m_strategy(row):
 def momentum_strategy(step=None):
     print('momentum_strategy start')
     # Beräkna sma_5 och sma_20
-    df['sma_5'] = df['pris'].rolling(5).mean()
-    df['sma_20'] = df['pris'].rolling(20).mean()
+    df['sma_5'] = df['close'].rolling(5).mean()
+    df['sma_20'] = df['close'].rolling(20).mean()
     df['m_strategy'] = 'hold' 
-    # print('mom priser2 step',step,'\n',df['pris'].tail())
+    # print('mom close2 step',step,'\n',df['close'].tail())
     
     
     df['m_strategy'] = df.apply(get_m_strategy, axis=1)
@@ -48,10 +47,10 @@ def get_f_strategy(row):
     i = row.name
   
     # Köp när priset bryter igenom den 38.2% Fibonacci-nivån från botten till toppen
-    if df['pris'].shift(0).loc[i] > df['fib38'].shift(0).loc[i] and df['pris'].shift(1).loc[i] < df['fib38'].shift(1).loc[i]:
+    if df['close'].shift(0).loc[i] > df['fib38'].shift(0).loc[i] and df['close'].shift(1).loc[i] < df['fib38'].shift(1).loc[i]:
         return 'buy'
     # Sälj när priset bryter igenom den 61.8% Fibonacci-nivån från toppen till botten
-    elif df['pris'].shift(0).loc[i] < df['fib62'].shift(0).loc[i] and df['pris'].shift(1).loc[i] > df['fib62'].shift(1).loc[i]:
+    elif df['close'].shift(0).loc[i] < df['fib62'].shift(0).loc[i] and df['close'].shift(1).loc[i] > df['fib62'].shift(1).loc[i]:
         return 'sell'
     # Behåll positionen annars
     else:
@@ -60,10 +59,10 @@ def get_f_strategy(row):
 def fibonacci_strategy():
     print('fibonacci_strategy start')
     # Beräkna 38.2%, 50% och 61.8% Fibonacci-nivåer för den senaste trenden
-    # Högsta priset under de senaste 21 dagarna
-    high = df['pris'].rolling(window=21).max()
-    # Lägsta priset under de senaste 21 dagarna
-    low = df['pris'].rolling(window=21).min()
+    # Högsta priset under de senaste 21 timmarna
+    high = df['close'].rolling(window=21).max()
+    # Lägsta priset under de senaste 21 timmarna
+    low = df['close'].rolling(window=21).min()
     diff = high - low
     df['fib38'] = high - (0.382 * diff)
     df['fib50'] = high - (0.5 * diff)
@@ -71,11 +70,11 @@ def fibonacci_strategy():
 
     df['f_strategy'] = df.apply(get_f_strategy, axis=1)
     # Köp när priset bryter igenom den 38.2% Fibonacci-nivån från botten till toppen
-    # if df['pris'].iloc[-1] > df['fib38'].iloc[-1] and df['pris'].iloc[-2] < df['fib38'].iloc[-2]:
+    # if df['close'].iloc[-1] > df['fib38'].iloc[-1] and df['close'].iloc[-2] < df['fib38'].iloc[-2]:
     #     return 'buy'
 
     # # Sälj när priset bryter igenom den 61.8% Fibonacci-nivån från toppen till botten
-    # elif df['pris'].iloc[-1] < df['fib62'].iloc[-1] and df['pris'].iloc[-2] > df['fib62'].iloc[-2]:
+    # elif df['close'].iloc[-1] < df['fib62'].iloc[-1] and df['close'].iloc[-2] > df['fib62'].iloc[-2]:
     #     return 'sell'
 
     # # Behåll positionen annars
@@ -86,10 +85,10 @@ def fibonacci_strategy():
 def get_b_strategy(row):
     i = row.name
     # if i == pd.to_datetime('2022-01-24 00:00:00'):
-    #     print('i = ',i, 'row = ', row,'\n', df['pris'].shift(1).loc[i], df['lower_band'].shift(1).loc[i], df['pris'].shift(0).loc[i], df['lower_band'].shift(0).loc[i])
-    if df['pris'].shift(1).loc[i] < df['upper_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] > df['upper_band'].shift(0).loc[i]:
+    #     print('i = ',i, 'row = ', row,'\n', df['close'].shift(1).loc[i], df['lower_band'].shift(1).loc[i], df['close'].shift(0).loc[i], df['lower_band'].shift(0).loc[i])
+    if df['close'].shift(1).loc[i] < df['upper_band'].shift(1).loc[i] and df['close'].shift(0).loc[i] > df['upper_band'].shift(0).loc[i]:
         return 'sell'
-    elif df['pris'].shift(1).loc[i] > df['lower_band'].shift(1).loc[i] and df['pris'].shift(0).loc[i] < df['lower_band'].shift(0).loc[i]:
+    elif df['close'].shift(1).loc[i] > df['lower_band'].shift(1).loc[i] and df['close'].shift(0).loc[i] < df['lower_band'].shift(0).loc[i]:
         return 'buy'
     else:
         return 'hold'
@@ -98,8 +97,8 @@ def get_b_strategy(row):
 def bollinger_strategy():
     print('bollinger_strategy start')
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
-    df['boll_sma'] = df['pris'].rolling(window=20).mean()
-    df['boll_std'] = df['pris'].rolling(window=20).std()
+    df['boll_sma'] = df['close'].rolling(window=20).mean()
+    df['boll_std'] = df['close'].rolling(window=20).std()
 
     # Beräkna övre och undre Bollinger-bands
     df['upper_band'] = df['boll_sma'] + (2 * df['boll_std'])
@@ -113,9 +112,9 @@ def bollinger_strategy():
     if len(df) < 2:
         return 'hold'
     
-    # if  df['pris'].iloc[-2] < df['upper_band'].iloc[-2] and df['pris'].iloc[-1] > df['upper_band'].iloc[-1]:
+    # if  df['close'].iloc[-2] < df['upper_band'].iloc[-2] and df['close'].iloc[-1] > df['upper_band'].iloc[-1]:
     #     return 'sell'
-    # elif df['pris'].iloc[-2] > df['lower_band'].iloc[-2] and df['pris'].iloc[-1] < df['lower_band'].iloc[-1]:
+    # elif df['close'].iloc[-2] > df['lower_band'].iloc[-2] and df['close'].iloc[-1] < df['lower_band'].iloc[-1]:
     #     return 'buy'
     # else:
     #     return 'hold'
@@ -146,7 +145,6 @@ def trading_logic():
     global df, use_features, model, in_position
     print('trading logic start')
     
-    #TODO: Lägg in en sell/buy/hold-kolumn från alla tre strategierna i df
     momentum_strategy()
     fibonacci_strategy()
     bollinger_strategy()
@@ -159,12 +157,24 @@ def trading_logic():
     final_strategy(in_position)
     
     if False:
-        print(df[['pris', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
+        print(df[['close', 'sma_5', 'fib38', 'lower_band']].tail(1).values[0])
         
     
 def handle_trading(out):
     global df
-    out = pd.DataFrame({'pris':float(out['c'])},index=[pd.to_datetime(out['E'],unit='ms')])
+    open_price = float(out['o'])
+    low_price = float(out['l'])
+    high_price = float(out['h'])
+    close_price = float(out['c'])
+    volume = float(out['v'])
+    
+    out = pd.DataFrame({'open':float(out['o']),
+                        'low':float(out['l']),
+                        'high':float(out['h']),
+                        'close':float(out['c']),
+                        'volume':float(out['v']),
+                        },
+                       index=[pd.to_datetime(out['E'],unit='ms')])
     df = pd.concat([df,out],axis=0)
     trading_logic()
 
