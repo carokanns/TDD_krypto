@@ -1,1 +1,1 @@
-pris sma_5 sma_20 m_strategy fib38 fib50 fib62 f_strategy boll_sma boll_std upper_band lower_band b_strategy 
+close sma_5 sma_20 m_strategy fib38 fib62 f_strategy boll_sma boll_std upper_band lower_band b_strategy 
