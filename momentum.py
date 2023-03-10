@@ -1,18 +1,20 @@
-#%%
+# %%
+import random
 import threading
 import time
 import websocket
 import pandas as pd
 import json
 
-def init_fibonacci_strategy():
-    pass
-    
 global df, in_position, use_features, model
+global entry, stop_loss, profit_target
 df = pd.DataFrame()
-in_position = False
-model=None
-use_features=[]
+in_position = None
+model = None
+entry, stop_loss, profit_target, buy_next = None, None, None, False
+use_features = []
+
+
 def get_m_strategy(row):
     current_price = row['close']
     sma_5 = row['sma_5']
@@ -27,17 +29,17 @@ def get_m_strategy(row):
     # Annars "hold"
     else:
         return "hold"
-        
-        
+
+
 def momentum_strategy(step=None):
+    global df
     # print('momentum_strategy start')
     # Beräkna sma_5 och sma_20
     df['sma_5'] = df['close'].rolling(5).mean()
     df['sma_20'] = df['close'].rolling(20).mean()
-    df['m_strategy'] = 'hold' 
+    df['m_strategy'] = 'hold'
     # print('mom close2 step',step,'\n',df['close'].tail())
-    
-    
+
     df['m_strategy'] = df.apply(get_m_strategy, axis=1)
     # print('step', step, 'df.shape', df.shape, 'sista värdet', df[['m_strategy']].iloc[-1])
     # print('sista datum', df.tail(1).index)
@@ -46,85 +48,91 @@ def momentum_strategy(step=None):
     # return df.tail(1)['m_strategy'].values[0]
     return df['m_strategy'].iloc[-1]
 
-def get_f_strategy(row):
-    print('get_f_strategy start',row.name)
-    datum = row.name
-    if 'entry' not in df.columns:
-        # Sker första gången
-        print('entry not in df.columns')
-        start_a_new_fibonacci(df,datum)
-        print('new columns',df.columns)
-        return 'hold'
-    
-    # Köp när priset bryter över 'entry' nerifrån och upp
-    if df['close'].shift(0).loc[datum] >= df['entry'].shift(0).loc[datum] and df['close'].shift(1).loc[datum] < df['entry'].shift(1).loc[datum]:
-        return 'buy'
-    # Säljsignal när priset bryter igenom target nerifrån och upp
-    elif df['close'].shift(0).loc[datum] >= df['profit_target'].shift(0).loc[datum] and df['close'].shift(1).loc[datum] < df['profit_target'].shift(1).loc[datum]:
-        return 'sell'
-    # Säljsignal när priset bryter igenom stop_loss uppifrån och ner
-    elif df['close'].shift(0).loc[datum] <= df['stop_loss'].shift(0).loc[datum] and df['close'].shift(1).loc[datum] > df['stop_loss'].shift(1).loc[datum]:
-        return 'sell'
-    # Behåll positionen annars
-    else:
-        return 'hold'
+
+def get_f_values(df_):
+    print('get_f_values start: df_.shape', df_.shape)
+    diff = df.high[-1] - df.low[-1]
+    l = [-0.618*diff, 0.618*diff, 1.618*diff]
+    stop_loss, entry, profit_target = df_.close[-1] + \
+        l[0], df_.close[-1]+l[1], df_.close[-1]+l[2]
+
+    return stop_loss, entry, profit_target
 
 
-def start_a_new_fibonacci(df, datum):
-    print('start_a_new_fibonacci', datum)
-
-    if len(df) < 24:
-        print('start_new', len(df), '< 24')
-        df[['stop_loss', 'entry', 'profit_target']] = 0
-        print('new columns',df.columns)
-    high = df['close'].rolling(window=24).max()
-    low = df['close'].rolling(window=24).min()
-
-    diff = high - low
-    print('high',high,'diff',diff)
-    close = df.at[datum, 'close']
-    levels = [close + level * diff for level in [-0.618, 0.618, 1.618]]
-    print('levels',levels)
-
-
-    df.loc[datum, 'stop_loss'] = df.loc[datum, 'close'] * levels[0]
-    df.loc[datum, 'entry'] = df.loc[datum, 'close'] * levels[1]
-    df.loc[datum, 'profit_target'] = df.loc[datum, 'close'] * levels[2]
-
-    print('stop_loss', df.loc[datum, 'stop_loss'], 'entry', df.loc[datum, 'entry'], 'profit_target',
-          df.loc[datum, 'profit_target'])
-
-    df = df.fillna(0)
-    return df
-
-    
 def fibonacci_strategy():
-    global in_position, df
-    print('fibonacci_strategy start')
-    # vi köper när vi går över "entry" och in_position==False
-    # vi säljer när vi är in_position och går under stop_loss eller över target
-    # Vi räknar om stop_loss och target efter vi har sålt
-    df['f_strategy'] = df.apply(get_f_strategy, axis=1)  
-    if in_position and (df['f_strategy'].iloc[-1] == 'sell'):
-        print("sell for", df['close'].iloc[-1])   
-        start_a_new_fibonacci(df,df.iloc[-1].index)
-        in_position=False
-        print("return sell for", df['close'].iloc[-1])
-        return 'sell'
-        
-    if not in_position and (df['f_strategy'].iloc[-1] == 'buy'):
-        # borde egentligen vara nästa open
-        print("return buy for", df['close'].iloc[-1])
-        in_position = True
-        return 'buy'
+    global df, stop_loss, entry, profit_target, buy_next, in_position
+    print('fibonacci_strategy start: df.shape', df.shape)
+    """
+    Funktionen har globalerna df, stop_loss, entry, profit_target, buy_next, och in_position Den returnerar inga värden.
 
-    print ('return hold and in_position =',in_position,'row =',df.iloc[-1].values)
-    print(df.iloc[:,8:12])
-    return 'hold'
+    Den kallas varje gång vi får en ny post som har lagts till sist i df med bl.a kolumnerna['open', 'high', 'low', 'close']
+    Första gången som den kallas är in_position = None och då skall vi sätta in_position = False och kalla på funktionen som vi testade innan: stop_loss, entry, profit_target = get_f_values(df)df.price = -1 och göra return
+    Därefter anvnäds hela tiden sista raden i df med:
+    om buy_next == True:  Sätt in_position = True och df['price'] = df.open och buy_next = False, print('Buy for', df.open) och return
+
+    om in_position == False och df.close > entry: sätt buy_next = True, sätt df.price = -1 och return
+    om in_position == True: df.price = föregående rads df.price
+    om in_position == True och(df.close > profit_target or df.close < stop_loss): kör stop_loss, entry, profit_target = get_f_values(df), sätt in_position = False och print('Sell for', df.close), gör return
+    annars sätt df.price = -1 och return
+    """
+    last_row = df.index[-1]
+    if in_position == None:
+        print('Första gången: Vi initiera in_position = False och sätter df.price = -1')
+
+        print('df.columns', df.columns, 'df', df.info())
+        in_position = False
+        buy_next = False
+        stop_loss, entry, profit_target = get_f_values(df)
+
+        print(df.index[-1])
+        df.loc[last_row, 'price'] = -1
+        return
+
+    # print(df.loc[last_row,[ 'open', 'high', 'low', 'close', 'price']])
+    print('in_position', in_position, 'entry', entry,
+          'stop_loss', stop_loss, 'profit_target', profit_target)
+    print(df)
+    print('GT', df['close'].iloc[-1] > entry)
+    if in_position == False and buy_next == False and df['close'].iloc[-1] > entry:
+        print('Köpläge uppnått: Vi sätter buy_next till True')
+
+        buy_next = True
+
+        df.loc[last_row, 'price'] = -1
+
+        return
+    if buy_next == True:
+        print('Dags för köp: Vi sätter buy_next till False och in_position till True och sätter df.price till df.open')
+
+        buy_next = False
+        df.loc[last_row, 'price'] = df['open'].iloc[-1]
+        in_position = True
+        return
+
+    if in_position == True and df['close'].iloc[-1] > profit_target:
+        print('Dags att sälja (profit_target): Vi sätter in_position till False och sätter df.price till close')
+
+        buy_next = False
+        in_position = False
+        df.loc[last_row, 'price'] = df['close'].iloc[-1]
+
+        return
+
+    if in_position == True and df['close'].iloc[-1] < stop_loss:
+        print('Dags att sälja (stop_loss): Vi sätter in_position till False och sätter df.price till close')
+
+        buy_next = False
+        in_position = False
+        df.loc[last_row, 'price'] = df['close'].iloc[-1]
+
+        return
+
+    print('Ingen köp eller sälj signal denna gång: Vi sätter df.price till föregående price')
+    df.loc[last_row, 'price'] = df['price'].iloc[-1]
 
 
 def get_b_strategy(row):
-    i = row.name        
+    i = row.name
 
     if df['close'].shift(1).loc[i] < df['upper_band'].shift(1).loc[i] and df['close'].shift(0).loc[i] > df['upper_band'].shift(0).loc[i]:
         return 'sell'
@@ -133,7 +141,7 @@ def get_b_strategy(row):
     else:
         return 'hold'
 
-    
+
 def bollinger_strategy():
     # print('bollinger_strategy start')
     # Beräkna 20-dagars rullande medelvärde och standardavvikelse
@@ -150,48 +158,51 @@ def bollinger_strategy():
 
     if len(df) < 2:
         return 'hold'
-    
+
     return df['b_strategy'].iloc[-1]
 
 
 def ml_strategy(use_features, model):
 
-    return # Bryt
+    return  # Bryt
 
     # Välj endast de features som används för prediction
     X = df[use_features].copy()
 
-
     # Gör predictions med modellen
-    df['proba'] = model.predict_proba(X)[:,1]
+    df['proba'] = model.predict_proba(X)[:, 1]
 
     # df['buy_prob'] = probs[:, 1]
     # df['sell_prob'] = probs[:, 0]
 
     return df
 
+
 def final_strategy(in_position_b, in_position_f, in_position_m):
     pass
 
+
 def trading_logic():
     global df, use_features, model, in_position
+    global entry, stop_loss, profit_target  # fibonacci
     print('trading logic start')
-    
+
+    # check if stop_loss has a value
     momentum_strategy()
     fibonacci_strategy()
     bollinger_strategy()
     # print('done with strategies')
-    
+
     ml_strategy(use_features, model)
     # print('done with ml')
-    
+
     # Här tar vi fram slutlig sell/buy/hold-strategi
     final_strategy(in_position, in_position, in_position)
-    
-    if False:
-        print(df[['close', 'sma_5', 'entry', 'lower_band']].tail(1).values[0])
-        
-    
+
+    # if True:
+    #     print(df[['close', 'sma_5', 'price', 'lower_band']].tail(1))
+
+
 def handle_trading(out):
     global df
     open_price = float(out['o'])
@@ -199,20 +210,23 @@ def handle_trading(out):
     high_price = float(out['h'])
     close_price = float(out['c'])
     volume = float(out['v'])
-    
-    out = pd.DataFrame({'open':float(out['o']),
-                        'low':float(out['l']),
-                        'high':float(out['h']),
-                        'close':float(out['c']),
-                        'volume':float(out['v']),
+
+    out = pd.DataFrame({'open': float(out['o']),
+                        'high': float(out['h']),
+                        'low': float(out['l']),
+                        'close': float(out['c']),
+                        'volume': float(out['v']),
+                        'price': -1.0,
                         },
-                       index=[pd.to_datetime(out['E'],unit='ms')])
-    df = pd.concat([df,out],axis=0)
+                       index=[pd.to_datetime(out['E'], unit='ms')])
+    df = pd.concat([df, out], axis=0)
     trading_logic()
+
 
 def on_message(ws, message):
     out = json.loads(message)
     handle_trading(out)
+
 
 def on_open(ws):
     ws.send(the_message)
@@ -221,10 +235,12 @@ def on_open(ws):
 def stop():
     ws.close()
 
+
 endpoint = "wss://stream.binance.com:9443/ws"
-the_message = json.dumps({'method': 'SUBSCRIBE', 'params': ['ethusdt@ticker'], 'id': 1})
+the_message = json.dumps(
+    {'method': 'SUBSCRIBE', 'params': ['ethusdt@ticker'], 'id': 1})
 ws = websocket.WebSocketApp(endpoint, on_message=on_message, on_open=on_open)
-#%%
+# %%
 
 
 def start(max_time=None):
@@ -246,4 +262,3 @@ def start(max_time=None):
 
 if __name__ == "__main__":
     start(max_time=30)
-
